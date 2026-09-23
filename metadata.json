@@ -1,0 +1,6 @@
+{
+  "name": "Chronos Time & Productivity Tracker",
+  "description": "Track daily tasks with one-click activity recording, analyze time spent, measure productive hours, and generate comprehensive productivity reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
