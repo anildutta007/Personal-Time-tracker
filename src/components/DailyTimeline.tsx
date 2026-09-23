@@ -1,39 +1,40 @@
 import React, { useState } from 'react';
-import { TimeEntry } from '../types/tracker';
+import { TimeEntry, Activity } from '../types/tracker';
 import { formatTime, formatDurationHuman, formatDate } from '../utils/formatters';
 import { IconResolver } from './IconResolver';
-import { Clock, Trash2, Edit2, Check, X, Calendar } from 'lucide-react';
+import { EditEntryModal } from './EditEntryModal';
+import { Clock, Trash2, Edit2, AlertTriangle, Wand2, Calendar } from 'lucide-react';
 
 interface DailyTimelineProps {
   entries: TimeEntry[];
+  activities: Activity[];
   onDeleteEntry: (id: string) => void;
   onUpdateEntry: (id: string, updates: Partial<TimeEntry>) => void;
 }
 
 export const DailyTimeline: React.FC<DailyTimelineProps> = ({
   entries,
+  activities,
   onDeleteEntry,
   onUpdateEntry,
 }) => {
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-  const [editNote, setEditNote] = useState('');
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
-  // Sort entries ascending by time
+  // Sort entries descending by start time (most recent first)
   const sortedEntries = [...entries].sort((a, b) => b.startTime - a.startTime);
 
-  const handleStartEdit = (entry: TimeEntry) => {
-    setEditingEntryId(entry.id);
-    setEditNote(entry.note || '');
-  };
-
-  const handleSaveEdit = (entryId: string) => {
-    onUpdateEntry(entryId, { note: editNote.trim() || undefined });
-    setEditingEntryId(null);
+  // Quick fix for entries bloated by +24 hours
+  const handleFix24HourBug = (entry: TimeEntry) => {
+    const correctedEndTime = entry.endTime - 24 * 60 * 60 * 1000;
+    const correctedDuration = Math.max(1, Math.floor((correctedEndTime - entry.startTime) / 1000));
+    onUpdateEntry(entry.id, {
+      endTime: correctedEndTime,
+      duration: correctedDuration,
+    });
   };
 
   return (
     <div className="space-y-6">
-      
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -60,14 +61,17 @@ export const DailyTimeline: React.FC<DailyTimelineProps> = ({
         ) : (
           <div className="divide-y divide-neutral-100">
             {sortedEntries.map((entry) => {
-              const isEditing = editingEntryId === entry.id;
+              // Check if entry duration exceeds 24 hours (suspicious midnight bug)
+              const isOver24Hours = entry.duration >= 86400;
 
               return (
                 <div
                   key={entry.id}
-                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-neutral-50/80 transition-colors"
+                  className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+                    isOver24Hours ? 'bg-amber-50/50 hover:bg-amber-50/80' : 'hover:bg-neutral-50/80'
+                  }`}
                 >
-                  <div className="flex items-start gap-3.5">
+                  <div className="flex items-start gap-3.5 min-w-0">
                     {/* Activity Icon */}
                     <div
                       className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 mt-0.5 shadow-2xs"
@@ -76,7 +80,7 @@ export const DailyTimeline: React.FC<DailyTimelineProps> = ({
                       <IconResolver name={entry.iconName} className="w-5 h-5" />
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-base font-bold text-neutral-900">
                           {entry.activityName}
@@ -88,62 +92,59 @@ export const DailyTimeline: React.FC<DailyTimelineProps> = ({
                       </div>
 
                       {/* Exact Start & Stop Times */}
-                      <div className="flex items-center gap-2 text-xs text-neutral-600 font-mono">
+                      <div className="flex items-center gap-2 text-xs text-neutral-600 font-mono flex-wrap">
                         <span className="text-neutral-900 font-semibold">{formatDate(entry.startTime)}</span>
                         <span>·</span>
-                        <span>{formatTime(entry.startTime)} → {formatTime(entry.endTime)}</span>
+                        <span>
+                          {formatTime(entry.startTime)} → {formatTime(entry.endTime)}
+                        </span>
                         <span>·</span>
-                        <span className="font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-md">
-                          {formatDurationHuman(entry.duration)}
+                        <span
+                          className={`font-bold px-2 py-0.5 rounded-md ${
+                            isOver24Hours
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-neutral-100 text-neutral-900'
+                          }`}
+                        >
+                          {formatDurationHuman(entry.duration)} ({Math.round(entry.duration / 60)} mins)
                         </span>
                       </div>
 
-                      {/* Note or Edit Input */}
-                      {isEditing ? (
-                        <div className="flex items-center gap-2 mt-2">
-                          <input
-                            type="text"
-                            value={editNote}
-                            onChange={(e) => setEditNote(e.target.value)}
-                            placeholder="Add details (e.g. walked in park)..."
-                            className="text-xs px-3 py-1.5 border border-neutral-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-neutral-900 w-64"
-                          />
+                      {/* Warning & 1-Click Fix if entry suffered from the 24h midnight bug */}
+                      {isOver24Hours && (
+                        <div className="flex items-center gap-2 pt-1 text-xs text-amber-800">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>This task recorded over 24 hours.</span>
                           <button
-                            onClick={() => handleSaveEdit(entry.id)}
-                            className="p-1.5 bg-neutral-900 text-white rounded-md hover:bg-neutral-800"
-                            title="Save"
+                            onClick={() => handleFix24HourBug(entry)}
+                            className="inline-flex items-center gap-1 font-bold text-blue-700 hover:text-blue-900 bg-white border border-blue-200 hover:bg-blue-50 px-2 py-0.5 rounded-md transition-colors shadow-2xs"
                           >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setEditingEntryId(null)}
-                            className="p-1.5 text-neutral-500 hover:text-neutral-800"
-                            title="Cancel"
-                          >
-                            <X className="w-3.5 h-3.5" />
+                            <Wand2 className="w-3 h-3 text-blue-600" />
+                            <span>Fix to Same Day ({Math.round((entry.duration - 86400) / 60)} mins)</span>
                           </button>
                         </div>
-                      ) : (
-                        entry.note && (
-                          <p className="text-xs text-neutral-600 bg-neutral-50 border-l-2 border-neutral-300 pl-2.5 py-0.5 mt-1 italic">
-                            "{entry.note}"
-                          </p>
-                        )
+                      )}
+
+                      {/* Note */}
+                      {entry.note && (
+                        <p className="text-xs text-neutral-600 bg-neutral-50 border-l-2 border-neutral-300 pl-2.5 py-0.5 mt-1 italic">
+                          "{entry.note}"
+                        </p>
                       )}
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
-                    {!isEditing && (
-                      <button
-                        onClick={() => handleStartEdit(entry)}
-                        className="p-2 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-lg transition-colors"
-                        title="Edit note"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setEditingEntry(entry)}
+                      className="p-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold"
+                      title="Edit entry times or notes"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+
                     <button
                       onClick={() => onDeleteEntry(entry.id)}
                       className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
@@ -159,6 +160,14 @@ export const DailyTimeline: React.FC<DailyTimelineProps> = ({
         )}
       </div>
 
+      {/* Edit Entry Modal */}
+      <EditEntryModal
+        isOpen={!!editingEntry}
+        entry={editingEntry}
+        activities={activities}
+        onClose={() => setEditingEntry(null)}
+        onSave={onUpdateEntry}
+      />
     </div>
   );
 };

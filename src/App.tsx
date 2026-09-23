@@ -125,6 +125,7 @@ export default function App() {
         {currentTab === 'timeline' && (
           <DailyTimeline
             entries={entries}
+            activities={activities}
             onDeleteEntry={deleteEntry}
             onUpdateEntry={updateEntry}
           />
