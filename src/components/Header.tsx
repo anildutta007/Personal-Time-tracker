@@ -2,6 +2,7 @@ import React from 'react';
 import { ActiveTimer } from '../types/tracker';
 import { formatDurationDigital } from '../utils/formatters';
 import { Plus, Download, Clock } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   currentTab: 'tracker' | 'timeline' | 'reports';
@@ -22,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 h-13 sm:h-16 flex items-center justify-between">
         
         {/* Brand */}
         <div className="flex items-center gap-3">
@@ -73,6 +74,8 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
+          <PWAInstallButton />
+
           {activeTimer && (
             <button
               onClick={() => setCurrentTab('tracker')}

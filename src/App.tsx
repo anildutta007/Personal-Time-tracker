@@ -81,13 +81,13 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-3 sm:space-y-4">
         
         {/* TAB 1: RECORD TIME */}
         {currentTab === 'tracker' && (
-          <div className="space-y-6">
+          <div className="space-y-3 sm:space-y-3.5">
             
-            {/* Live Active Recording / Idle Card */}
+            {/* Live Active Recording Banner or Minimal Ready Strip */}
             <ActiveTrackerCard
               activeTimer={activeTimer}
               activeElapsedSeconds={activeElapsedSeconds}
@@ -99,7 +99,16 @@ export default function App() {
               onOpenManualEntry={() => setIsManualEntryOpen(true)}
             />
 
-            {/* Daily 24-Hour Balance Summary */}
+            {/* Quick Activity Button Grid - All Tasks selectable immediately */}
+            <ActivityGrid
+              activities={activities}
+              activeTimer={activeTimer}
+              onStartActivity={startActivity}
+              onStopActiveTimer={stopActiveTimer}
+              onOpenCreateActivity={() => setIsCreateActivityOpen(true)}
+            />
+
+            {/* Compact Daily 24-Hour Balance Summary */}
             <ProductivityScoreCard
               totalSeconds={todayMetrics.totalSeconds}
               sleepSeconds={todayMetrics.sleepSeconds}
@@ -107,15 +116,6 @@ export default function App() {
               activeLifeSeconds={todayMetrics.activeLifeSeconds}
               leisureSeconds={todayMetrics.leisureSeconds}
               idleSeconds={todayMetrics.idleSeconds}
-            />
-
-            {/* Quick Activity Button Grid */}
-            <ActivityGrid
-              activities={activities}
-              activeTimer={activeTimer}
-              onStartActivity={startActivity}
-              onStopActiveTimer={stopActiveTimer}
-              onOpenCreateActivity={() => setIsCreateActivityOpen(true)}
             />
 
           </div>
