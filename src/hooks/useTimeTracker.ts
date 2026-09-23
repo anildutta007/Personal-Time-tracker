@@ -6,6 +6,31 @@ const STORAGE_KEY_ACTIVITIES = 'daily_life_activities_v2';
 const STORAGE_KEY_ENTRIES = 'daily_life_entries_v2';
 const STORAGE_KEY_TIMER = 'daily_life_timer_v2';
 
+/**
+ * Automatically sanitizes entries by repairing any entry where endTime
+ * was accidentally offset forward by 24h (86,400,000ms), and guarantees
+ * duration strictly equals (endTime - startTime).
+ */
+export function sanitizeEntries(rawEntries: TimeEntry[]): TimeEntry[] {
+  return rawEntries.map((entry) => {
+    let { startTime, endTime } = entry;
+
+    // If endTime is >= 24h after startTime, automatically strip the extra 24-hour offsets
+    if (endTime - startTime >= 86400 * 1000) {
+      while (endTime - startTime >= 86400 * 1000) {
+        endTime -= 86400 * 1000;
+      }
+    }
+
+    const duration = Math.max(1, Math.floor((endTime - startTime) / 1000));
+    return {
+      ...entry,
+      endTime,
+      duration,
+    };
+  });
+}
+
 export function useTimeTracker() {
   // Load activities
   const [activities, setActivities] = useState<Activity[]>(() => {
@@ -18,11 +43,14 @@ export function useTimeTracker() {
     return DEFAULT_ACTIVITIES;
   });
 
-  // Load entries
+  // Load entries and immediately auto-repair any corrupted 24h offsets
   const [entries, setEntries] = useState<TimeEntry[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_ENTRIES);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return sanitizeEntries(parsed);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -71,7 +99,8 @@ export function useTimeTracker() {
   // Persist entries
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+      const sanitized = sanitizeEntries(entries);
+      localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(sanitized));
     } catch (e) {
       console.error(e);
     }

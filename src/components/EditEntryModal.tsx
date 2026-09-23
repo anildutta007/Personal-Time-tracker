@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Activity, TimeEntry } from '../types/tracker';
 import { formatDurationHuman, formatTime, formatDate } from '../utils/formatters';
-import { X, Clock, AlertCircle, ArrowRight, Check } from 'lucide-react';
+import { X, Clock, AlertCircle, ArrowRight, Moon } from 'lucide-react';
 
 interface EditEntryModalProps {
   isOpen: boolean;
@@ -21,8 +21,8 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
   if (!isOpen || !entry) return null;
 
   // Extract initial date and time
-  const startDate = new Date(entry.startTime);
-  const endDate = new Date(entry.endTime);
+  const startD = new Date(entry.startTime);
+  const endD = new Date(entry.endTime);
 
   const formatLocalDate = (d: Date) => {
     const y = d.getFullYear();
@@ -37,45 +37,33 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
     return `${h}:${min}`;
   };
 
-  const [date, setDate] = useState(formatLocalDate(startDate));
-  const [startTime, setStartTime] = useState(formatLocalTime(startDate));
-  const [endTime, setEndTime] = useState(formatLocalTime(endDate));
+  const getTomorrowDate = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    dateObj.setDate(dateObj.getDate() + 1);
+    return formatLocalDate(dateObj);
+  };
+
+  const [startDate, setStartDate] = useState(formatLocalDate(startD));
+  const [startTime, setStartTime] = useState(formatLocalTime(startD));
+  const [endDate, setEndDate] = useState(formatLocalDate(endD));
+  const [endTime, setEndTime] = useState(formatLocalTime(endD));
   const [activityId, setActivityId] = useState(entry.activityId);
   const [note, setNote] = useState(entry.note || '');
   const [error, setError] = useState<string | null>(null);
 
-  // Check if initial entry crossed midnight or ended on a later day
-  const initialCrossedMidnight = endDate.getDate() !== startDate.getDate() || (entry.endTime - entry.startTime >= 86400 * 1000);
-  const [userToggledNextDay, setUserToggledNextDay] = useState<boolean | null>(
-    // If original duration was suspiciously > 24 hours, default next day to false so user can easily fix it
-    entry.duration > 86400 ? false : (initialCrossedMidnight ? true : null)
-  );
-
-  // Auto-detect if endTime is earlier than startTime (e.g. 23:00 to 06:00)
-  const autoCrossesMidnight = useMemo(() => {
-    if (!startTime || !endTime) return false;
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    return (endH * 60 + endM) < (startH * 60 + startM);
-  }, [startTime, endTime]);
-
-  const endsNextDay = userToggledNextDay !== null ? userToggledNextDay : autoCrossesMidnight;
-
-  // Real-time calculation
+  // Real-time calculation based strictly on dates & times
   const calculation = useMemo(() => {
-    if (!date || !startTime || !endTime) return null;
+    if (!startDate || !startTime || !endDate || !endTime) return null;
 
     try {
-      const [y, m, d] = date.split('-').map(Number);
-      const [startH, startM] = startTime.split(':').map(Number);
-      const [endH, endM] = endTime.split(':').map(Number);
+      const [sy, sm, sd] = startDate.split('-').map(Number);
+      const [sh, smin] = startTime.split(':').map(Number);
+      const [ey, em, ed] = endDate.split('-').map(Number);
+      const [eh, emin] = endTime.split(':').map(Number);
 
-      const sObj = new Date(y, m - 1, d, startH, startM, 0, 0);
-      let eObj = new Date(y, m - 1, d, endH, endM, 0, 0);
-
-      if (endsNextDay) {
-        eObj = new Date(eObj.getTime() + 24 * 60 * 60 * 1000);
-      }
+      const sObj = new Date(sy, sm - 1, sd, sh, smin, 0, 0);
+      const eObj = new Date(ey, em - 1, ed, eh, emin, 0, 0);
 
       const startMs = sObj.getTime();
       const endMs = eObj.getTime();
@@ -88,21 +76,30 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
         startMs,
         endMs,
         diffSec,
+        diffMinutes: Math.round(diffSec / 60),
         isValid: diffSec > 0,
         formattedStart: `${formatDate(startMs)}, ${formatTime(startMs)}`,
         formattedEnd: `${formatDate(endMs)}, ${formatTime(endMs)}`,
+        isCrossDay: startDate !== endDate,
       };
     } catch {
       return null;
     }
-  }, [date, startTime, endTime, endsNextDay]);
+  }, [startDate, startTime, endDate, endTime]);
+
+  const isTimeInvertedOnSameDate = useMemo(() => {
+    if (startDate !== endDate || !startTime || !endTime) return false;
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    return (eh * 60 + em) < (sh * 60 + sm);
+  }, [startDate, endDate, startTime, endTime]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (!calculation || !calculation.isValid) {
-      setError('End time must be after start time.');
+      setError('End date & time must be strictly after start date & time.');
       return;
     }
 
@@ -170,31 +167,40 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
             </select>
           </div>
 
-          {/* Date */}
-          <div>
-            <label className="block font-semibold text-neutral-700 mb-1">Date</label>
-            <input
-              type="date"
-              required
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full px-3 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 text-sm font-medium"
-            />
-          </div>
-
-          {/* Times */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Start Date & Time */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-neutral-700 mb-1">Start Date</label>
+              <input
+                type="date"
+                required
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 text-sm font-medium"
+              />
+            </div>
             <div>
               <label className="block font-semibold text-neutral-700 mb-1">Start Time</label>
               <input
                 type="time"
                 required
                 value={startTime}
-                onChange={(e) => {
-                  setStartTime(e.target.value);
-                  setUserToggledNextDay(null);
-                }}
+                onChange={(e) => setStartTime(e.target.value)}
                 className="w-full px-3 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 font-mono text-sm font-semibold"
+              />
+            </div>
+          </div>
+
+          {/* End Date & Time */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-neutral-700 mb-1">End Date</label>
+              <input
+                type="date"
+                required
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 text-sm font-medium"
               />
             </div>
             <div>
@@ -203,42 +209,37 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
                 type="time"
                 required
                 value={endTime}
-                onChange={(e) => {
-                  setEndTime(e.target.value);
-                  setUserToggledNextDay(null);
-                }}
+                onChange={(e) => setEndTime(e.target.value)}
                 className="w-full px-3 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 font-mono text-sm font-semibold"
               />
             </div>
           </div>
 
-          {/* Crosses Midnight Checkbox */}
-          <div className="p-2.5 bg-neutral-50 rounded-xl border border-neutral-200/80 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="editCrossMidnight"
-                checked={endsNextDay}
-                onChange={(e) => setUserToggledNextDay(e.target.checked)}
-                className="w-4 h-4 rounded text-neutral-900 focus:ring-neutral-900 cursor-pointer"
-              />
-              <label htmlFor="editCrossMidnight" className="text-neutral-700 font-medium cursor-pointer select-none">
-                Ends on the next day (+1 day)
-              </label>
+          {/* Helper for inverted time on same date */}
+          {isTimeInvertedOnSameDate && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3 text-amber-900">
+              <div className="flex items-center gap-2">
+                <Moon className="w-4 h-4 text-amber-700 shrink-0" />
+                <span className="text-xs">
+                  End time ({endTime}) is earlier than start time ({startTime}). Did this task end the next morning?
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEndDate(getTomorrowDate(startDate))}
+                className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 font-bold text-amber-900 rounded-lg text-xs shrink-0 transition-colors"
+              >
+                Set End Date to Tomorrow
+              </button>
             </div>
-            {autoCrossesMidnight && (
-              <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/70 px-2 py-0.5 rounded-md">
-                Overnight detected
-              </span>
-            )}
-          </div>
+          )}
 
           {/* Real-Time Live Calculation Preview */}
           {calculation && (
             <div
               className={`p-3.5 rounded-xl border transition-all ${
                 calculation.isValid
-                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                  ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
                   : 'bg-rose-50 border-rose-200 text-rose-900'
               }`}
             >
@@ -249,7 +250,7 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
                 <span className="text-sm font-mono font-bold">
                   {calculation.isValid ? (
                     <>
-                      {formatDurationHuman(calculation.diffSec)} ({Math.round(calculation.diffSec / 60)} mins)
+                      {calculation.diffMinutes} mins ({formatDurationHuman(calculation.diffSec)})
                     </>
                   ) : (
                     'Invalid Time Range'
@@ -262,9 +263,9 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
                   <span className="font-semibold">{calculation.formattedStart}</span>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <span className="font-semibold">{calculation.formattedEnd}</span>
-                  {endsNextDay && (
+                  {calculation.isCrossDay && (
                     <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded">
-                      +1 Day (Overnight)
+                      Overnight / Multi-day
                     </span>
                   )}
                 </div>

@@ -3,7 +3,7 @@ import { TimeEntry, Activity } from '../types/tracker';
 import { formatTime, formatDurationHuman, formatDate } from '../utils/formatters';
 import { IconResolver } from './IconResolver';
 import { EditEntryModal } from './EditEntryModal';
-import { Clock, Trash2, Edit2, AlertTriangle, Wand2, Calendar } from 'lucide-react';
+import { Clock, Trash2, Edit2, Calendar } from 'lucide-react';
 
 interface DailyTimelineProps {
   entries: TimeEntry[];
@@ -22,16 +22,6 @@ export const DailyTimeline: React.FC<DailyTimelineProps> = ({
 
   // Sort entries descending by start time (most recent first)
   const sortedEntries = [...entries].sort((a, b) => b.startTime - a.startTime);
-
-  // Quick fix for entries bloated by +24 hours
-  const handleFix24HourBug = (entry: TimeEntry) => {
-    const correctedEndTime = entry.endTime - 24 * 60 * 60 * 1000;
-    const correctedDuration = Math.max(1, Math.floor((correctedEndTime - entry.startTime) / 1000));
-    onUpdateEntry(entry.id, {
-      endTime: correctedEndTime,
-      duration: correctedDuration,
-    });
-  };
 
   return (
     <div className="space-y-6">
@@ -61,15 +51,10 @@ export const DailyTimeline: React.FC<DailyTimelineProps> = ({
         ) : (
           <div className="divide-y divide-neutral-100">
             {sortedEntries.map((entry) => {
-              // Check if entry duration exceeds 24 hours (suspicious midnight bug)
-              const isOver24Hours = entry.duration >= 86400;
-
               return (
                 <div
                   key={entry.id}
-                  className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-                    isOver24Hours ? 'bg-amber-50/50 hover:bg-amber-50/80' : 'hover:bg-neutral-50/80'
-                  }`}
+                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-neutral-50/80 transition-colors"
                 >
                   <div className="flex items-start gap-3.5 min-w-0">
                     {/* Activity Icon */}
@@ -99,31 +84,10 @@ export const DailyTimeline: React.FC<DailyTimelineProps> = ({
                           {formatTime(entry.startTime)} → {formatTime(entry.endTime)}
                         </span>
                         <span>·</span>
-                        <span
-                          className={`font-bold px-2 py-0.5 rounded-md ${
-                            isOver24Hours
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-neutral-100 text-neutral-900'
-                          }`}
-                        >
+                        <span className="font-bold px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-900">
                           {formatDurationHuman(entry.duration)} ({Math.round(entry.duration / 60)} mins)
                         </span>
                       </div>
-
-                      {/* Warning & 1-Click Fix if entry suffered from the 24h midnight bug */}
-                      {isOver24Hours && (
-                        <div className="flex items-center gap-2 pt-1 text-xs text-amber-800">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span>This task recorded over 24 hours.</span>
-                          <button
-                            onClick={() => handleFix24HourBug(entry)}
-                            className="inline-flex items-center gap-1 font-bold text-blue-700 hover:text-blue-900 bg-white border border-blue-200 hover:bg-blue-50 px-2 py-0.5 rounded-md transition-colors shadow-2xs"
-                          >
-                            <Wand2 className="w-3 h-3 text-blue-600" />
-                            <span>Fix to Same Day ({Math.round((entry.duration - 86400) / 60)} mins)</span>
-                          </button>
-                        </div>
-                      )}
 
                       {/* Note */}
                       {entry.note && (
